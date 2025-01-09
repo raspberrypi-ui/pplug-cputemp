@@ -33,21 +33,40 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+#define _GNU_SOURCE
+#include <stdio.h>
 #include <string.h>
+#include <locale.h>
 #include <sys/time.h>
 #include <time.h>
 #include <sys/sysinfo.h>
 #include <stdlib.h>
 #include <glib/gi18n.h>
 
+#ifdef LXPLUG
 #include "plugin.h"
+#define wrap_new_menu_item(plugin,text,maxlen,icon) lxpanel_plugin_new_menu_item(plugin->panel,text,maxlen,icon)
+#define wrap_set_menu_icon(plugin,image,icon) lxpanel_plugin_set_menu_icon(plugin->panel,image,icon)
+#define wrap_set_taskbar_icon(plugin,image,icon) lxpanel_plugin_set_taskbar_icon(plugin->panel,image,icon)
+#define wrap_show_menu(plugin,menu) gtk_menu_popup_at_widget(GTK_MENU(menu),plugin,GDK_GRAVITY_SOUTH_WEST,GDK_GRAVITY_NORTH_WEST,NULL)
+#define wrap_icon_size(plugin) panel_get_safe_icon_size(plugin->panel)
+#define wrap_is_at_bottom(plugin) panel_is_at_bottom(plugin->panel)
+#else
+#include "lxutils.h"
+#define lxpanel_notify(panel,msg) lxpanel_notify(msg)
+#define lxpanel_plugin_update_menu_icon(item,icon) update_menu_icon(item,icon)
+#define lxpanel_plugin_append_menu_icon(item,icon) append_menu_icon(item,icon)
+#define wrap_new_menu_item(plugin,text,maxlen,icon) new_menu_item(text,maxlen,icon,plugin->icon_size)
+#define wrap_set_menu_icon(plugin,image,icon) set_menu_icon(image,icon,plugin->icon_size)
+#define wrap_set_taskbar_icon(plugin,image,icon) set_taskbar_icon(image,icon,plugin->icon_size)
+#define wrap_show_menu(plugin,menu) show_menu_with_kbd(plugin,menu)
+#define wrap_icon_size(plugin) (plugin->icon_size)
+#define wrap_is_at_bottom(plugin) (plugin->bottom)
+#endif
+
+#include "cputemp.h"
 
 #define BORDER_SIZE 2
-
-#define MAX_NUM_SENSORS             10
 
 #define PROC_THERMAL_DIRECTORY      "/proc/acpi/thermal_zone/"
 #define PROC_THERMAL_TEMPF          "temperature"
@@ -57,42 +76,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define SYSFS_THERMAL_SUBDIR_PREFIX "thermal_zone"
 #define SYSFS_THERMAL_TEMPF         "temp"
 
-
-typedef gint (*GetTempFunc) (char const *);
-
-/* Private context for plugin */
-
-typedef struct
-{
-    GdkRGBA foreground_color;			    /* Foreground colour for drawing area */
-    GdkRGBA background_color;			    /* Background colour for drawing area */
-    GdkRGBA low_throttle_color;			    /* Colour for bars with ARM freq cap */
-    GdkRGBA high_throttle_color;			/* Colour for bars with throttling */
-    GtkWidget *plugin;                      /* Back pointer to the widget */
-    LXPanel *panel;                         /* Back pointer to panel */
-    GtkWidget *da;				            /* Drawing area */
-    cairo_surface_t *pixmap;				/* Pixmap to be drawn on drawing area */
-    guint timer;				            /* Timer for periodic update */
-    float *stats_cpu;			            /* Ring buffer of temperature values */
-    int *stats_throttle;                    /* Ring buffer of throttle status */
-    unsigned int ring_cursor;			    /* Cursor for ring buffer */
-    guint pixmap_width;				        /* Width of drawing area pixmap; also size of ring buffer; does not include border size */
-    guint pixmap_height;			        /* Height of drawing area pixmap; does not include border size */
-    int lower_temp;                         /* Temperature of bottom of graph */
-    int upper_temp;                         /* Temperature of top of graph */
-    int numsensors;
-    char *sensor_array[MAX_NUM_SENSORS];
-    GetTempFunc get_temperature[MAX_NUM_SENSORS];
-    gint temperature[MAX_NUM_SENSORS];
-    config_setting_t *settings;
-    gboolean ispi;
-} CPUTempPlugin;
-
+#ifdef LXPLUG
 static void redraw_pixmap (CPUTempPlugin * c);
 static gboolean cpu_update (CPUTempPlugin * c);
 static gboolean draw (GtkWidget * widget, cairo_t * cr, CPUTempPlugin * c);
 static void cpu_destructor (gpointer user_data);
-
+#endif
 static gboolean is_pi (void)
 {
     if (system ("raspi-config nonint is_pi") == 0)
@@ -172,7 +161,6 @@ static gint hwmon_get_temperature (char const *sensor_path)
     return _get_reading (sensor_path);
 }
 
-
 static int add_sensor (CPUTempPlugin* c, char const* sensor_path, GetTempFunc get_temp)
 {
     if (c->numsensors + 1 > MAX_NUM_SENSORS)
@@ -190,7 +178,6 @@ static int add_sensor (CPUTempPlugin* c, char const* sensor_path, GetTempFunc ge
 
     return 0;
 }
-
 
 static gboolean try_hwmon_sensors (CPUTempPlugin* c, const char *path)
 {
@@ -280,7 +267,7 @@ static void check_sensors (CPUTempPlugin *c)
     
     g_message ("cputemp: Found %d sensors", c->numsensors);
 }
-
+#ifdef LXPLUG
 /* Redraw after timer callback or resize. */
 static void redraw_pixmap (CPUTempPlugin * c)
 {
@@ -288,7 +275,7 @@ static void redraw_pixmap (CPUTempPlugin * c)
     cairo_set_line_width (cr, 1.0);
     /* Erase pixmap. */
     cairo_rectangle(cr, 0, 0, c->pixmap_width, c->pixmap_height);
-    cairo_set_source_rgba(cr, c->background_color.blue,  c->background_color.green, c->background_color.red, c->background_color.alpha);
+    cairo_set_source_rgba(cr, c->background_colour.blue,  c->background_colour.green, c->background_colour.red, c->background_colour.alpha);
     cairo_fill(cr);
 
     /* Recompute pixmap. */
@@ -300,11 +287,11 @@ static void redraw_pixmap (CPUTempPlugin * c)
         if (c->stats_cpu[drawing_cursor] != 0.0)
         {
             if (c->stats_throttle[drawing_cursor] & 0x8)
-                cairo_set_source_rgba(cr, c->high_throttle_color.blue,  c->high_throttle_color.green, c->high_throttle_color.red, c->high_throttle_color.alpha);
+                cairo_set_source_rgba(cr, c->high_throttle_colour.blue,  c->high_throttle_colour.green, c->high_throttle_colour.red, c->high_throttle_colour.alpha);
             else if (c->stats_throttle[drawing_cursor] & 0x2)
-                cairo_set_source_rgba(cr, c->low_throttle_color.blue,  c->low_throttle_color.green, c->low_throttle_color.red, c->low_throttle_color.alpha);
+                cairo_set_source_rgba(cr, c->low_throttle_colour.blue,  c->low_throttle_colour.green, c->low_throttle_colour.red, c->low_throttle_colour.alpha);
             else
-                cairo_set_source_rgba(cr, c->foreground_color.blue,  c->foreground_color.green, c->foreground_color.red, c->foreground_color.alpha);
+                cairo_set_source_rgba(cr, c->foreground_colour.blue,  c->foreground_colour.green, c->foreground_colour.red, c->foreground_colour.alpha);
 
             float val = c->stats_cpu[drawing_cursor] * 100.0;
             val -= c->lower_temp;
@@ -347,7 +334,7 @@ static void redraw_pixmap (CPUTempPlugin * c)
     GdkPixbuf *pixbuf = gdk_pixbuf_new_from_data (cairo_image_surface_get_data (c->pixmap), GDK_COLORSPACE_RGB, TRUE, 8, c->pixmap_width, c->pixmap_height, c->pixmap_width *4, NULL, NULL);
     gtk_image_set_from_pixbuf (GTK_IMAGE (c->da), pixbuf);
 }
-
+#endif
 static gint get_temperature (CPUTempPlugin *c)
 {
     gint max = -273, cur, i;
@@ -384,7 +371,7 @@ static char *get_string (char *cmd)
     return res;
 }
 
-static int get_throttle (CPUTempPlugin *c)
+static int get_throttle (void)
 {
     char *buf;
     unsigned int val;
@@ -395,7 +382,7 @@ static int get_throttle (CPUTempPlugin *c)
     g_free (buf);
     return val;
 }
-
+#ifdef LXPLUG
 /* Periodic timer callback. */
 static gboolean cpu_update (CPUTempPlugin *c)
 {
@@ -404,7 +391,7 @@ static gboolean cpu_update (CPUTempPlugin *c)
 
     int t = get_temperature (c);
     c->stats_cpu[c->ring_cursor] = t / 100.0;
-    c->stats_throttle[c->ring_cursor] = c->ispi ? get_throttle (c) : 0;
+    c->stats_throttle[c->ring_cursor] = c->ispi ? get_throttle () : 0;
     c->ring_cursor += 1;
     if (c->ring_cursor >= c->pixmap_width) c->ring_cursor = 0;
 
@@ -426,8 +413,8 @@ static void cpu_configuration_changed (LXPanel *panel, GtkWidget *p)
         /* If statistics buffer does not exist or it changed size, reallocate and preserve existing data. */
         if ((c->stats_cpu == NULL) || (new_pixmap_width != c->pixmap_width))
         {
-            float *new_stats_cpu = g_new0 (typeof (*c->stats_cpu), new_pixmap_width);
-            int *new_stats_throttle = g_new0 (typeof (*c->stats_throttle), new_pixmap_width);
+            float *new_stats_cpu = g_new0 (float, new_pixmap_width);
+            int *new_stats_throttle = g_new0 (int, new_pixmap_width);
             if (c->stats_cpu != NULL)
             {
                 if (new_pixmap_width > c->pixmap_width)
@@ -491,14 +478,74 @@ static gboolean draw (GtkWidget * widget, cairo_t * cr, CPUTempPlugin * c)
      * Translate it in both x and y by the border size. */
     if (c->pixmap != NULL)
     {
-        cairo_set_source_rgb (cr, 0, 0, 0); // FIXME: use black color from style
+        cairo_set_source_rgb (cr, 0, 0, 0); // FIXME: use black colour from style
         cairo_set_source_surface (cr, c->pixmap, BORDER_SIZE, BORDER_SIZE);
         cairo_paint (cr);
     }
     return FALSE;
 }
+#else
+/* Periodic timer callback */
+
+static gboolean cpu_update (CPUTempPlugin *c)
+{
+    char buffer[10];
+    int temp, thr;
+    float ftemp;
+
+    if (g_source_is_destroyed (g_main_current_source ())) return FALSE;
+
+    temp = get_temperature (c);
+
+    sprintf (buffer, "%3d°", temp);
+
+    ftemp = temp;
+    ftemp -= c->lower_temp;
+    ftemp /= (c->upper_temp - c->lower_temp);
+
+    thr = 0;
+    if (c->ispi)
+    {
+        temp = get_throttle ();
+        if (temp & 0x08) thr = 2;
+        else if (temp & 0x02) thr = 1;
+    }
+
+    graph_new_point (&(c->graph), ftemp, thr, buffer);
+
+    return TRUE;
+}
+
+static void cputemp_gesture_pressed (GtkGestureLongPress *, gdouble x, gdouble y, CPUTempPlugin *)
+{
+    pressed = PRESS_LONG;
+    press_x = x;
+    press_y = y;
+}
+
+static void cputemp_gesture_end (GtkGestureLongPress *, GdkEventSequence *, CPUTempPlugin *c)
+{
+    if (pressed == PRESS_LONG) pass_right_click (c->plugin, press_x, press_y);
+}
+
+void cputemp_update_display (CPUTempPlugin *c)
+{
+    graph_reload (&(c->graph), c->icon_size, c->background_colour, c->foreground_colour,
+        c->low_throttle_colour, c->high_throttle_colour);
+}
+
+void cputemp_destructor (gpointer user_data)
+{
+    CPUTempPlugin *c = (CPUTempPlugin *) user_data;
+    if (c->timer) g_source_remove (c->timer);
+    if (c->gesture) g_object_unref (c->gesture);
+    g_free (c);
+}
+#endif
 
 /* Plugin constructor. */
+
+#ifdef LXPLUG
 static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
 {
     /* Allocate and initialize plugin context */
@@ -506,11 +553,9 @@ static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
     const char *str;
     int val;
 
-#ifdef ENABLE_NLS
     setlocale (LC_ALL, "");
     bindtextdomain (GETTEXT_PACKAGE, PACKAGE_LOCALE_DIR);
     bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
-#endif
 
     /* Allocate top level widget and set into plugin widget pointer. */
     c->panel = panel;
@@ -521,33 +566,43 @@ static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
     /* Allocate icon as a child of top level */
     c->da = gtk_image_new ();
     gtk_container_add (GTK_CONTAINER (c->plugin), c->da);
+#else
+
+void cputemp_init (CPUTempPlugin *c)
+{
+    /* Allocate icon as a child of top level */
+    graph_init (&(c->graph));
+    gtk_container_add (GTK_CONTAINER (c->plugin), c->graph.da);
+#endif
+
 
     /* Set up variables */
     c->ispi = is_pi ();
+#ifdef LXPLUG
 
     if (config_setting_lookup_string (settings, "Foreground", &str))
     {
-        if (!gdk_rgba_parse (&c->foreground_color, str))
-            gdk_rgba_parse (&c->foreground_color, "dark gray");
-    } else gdk_rgba_parse (&c->foreground_color, "dark gray");
+        if (!gdk_rgba_parse (&c->foreground_colour, str))
+            gdk_rgba_parse (&c->foreground_colour, "dark gray");
+    } else gdk_rgba_parse (&c->foreground_colour, "dark gray");
 
     if (config_setting_lookup_string (settings, "Background", &str))
     {
-        if (!gdk_rgba_parse (&c->background_color, str))
-            gdk_rgba_parse (&c->background_color, "light gray");
-    } else gdk_rgba_parse (&c->background_color, "light gray");
+        if (!gdk_rgba_parse (&c->background_colour, str))
+            gdk_rgba_parse (&c->background_colour, "light gray");
+    } else gdk_rgba_parse (&c->background_colour, "light gray");
 
     if (config_setting_lookup_string (settings, "Throttle1", &str))
     {
-        if (!gdk_rgba_parse (&c->low_throttle_color, str))
-            gdk_rgba_parse (&c->low_throttle_color, "orange");
-    } else gdk_rgba_parse (&c->low_throttle_color, "orange");
+        if (!gdk_rgba_parse (&c->low_throttle_colour, str))
+            gdk_rgba_parse (&c->low_throttle_colour, "orange");
+    } else gdk_rgba_parse (&c->low_throttle_colour, "orange");
 
     if (config_setting_lookup_string (settings, "Throttle2", &str))
     {
-        if (!gdk_rgba_parse (&c->high_throttle_color, str))
-            gdk_rgba_parse (&c->high_throttle_color, "red");
-    } else gdk_rgba_parse (&c->high_throttle_color, "red");
+        if (!gdk_rgba_parse (&c->high_throttle_colour, str))
+            gdk_rgba_parse (&c->high_throttle_colour, "red");
+    } else gdk_rgba_parse (&c->high_throttle_colour, "red");
 
     if (config_setting_lookup_int (settings, "LowTemp", &val))
     {
@@ -562,24 +617,40 @@ static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
         else c->upper_temp = 90;
     }
     else c->upper_temp = 90;
-
+#endif
     /* Find the system thermal sensors */
     check_sensors (c);
 
+
+#ifdef LXPLUG
     /* Connect signals. */
     g_signal_connect(G_OBJECT (c->da), "draw", G_CALLBACK (draw), (gpointer) c);
 
     /* Initialise buffers */
     c->stats_cpu = NULL;
     cpu_configuration_changed (panel, c->plugin);
+#else
+    cputemp_update_display (c);
+
+    /* Set up long press */
+    c->gesture = gtk_gesture_long_press_new (c->plugin);
+    gtk_gesture_single_set_touch_only (GTK_GESTURE_SINGLE (c->gesture), touch_only);
+    g_signal_connect (c->gesture, "pressed", G_CALLBACK (cputemp_gesture_pressed), c);
+    g_signal_connect (c->gesture, "end", G_CALLBACK (cputemp_gesture_end), c);
+    gtk_event_controller_set_propagation_phase (GTK_EVENT_CONTROLLER (c->gesture), GTK_PHASE_BUBBLE);
+#endif
 
     /* Connect a timer to refresh the statistics. */
     c->timer = g_timeout_add (1500, (GSourceFunc) cpu_update, (gpointer) c);
 
     /* Show the widget and return. */
     gtk_widget_show_all (c->plugin);
+#ifdef LXPLUG
     return c->plugin;
+#endif
 }
+
+#ifdef LXPLUG
 
 /* Plugin destructor. */
 static void cpu_destructor (gpointer user_data)
@@ -601,13 +672,13 @@ static gboolean cpu_apply_configuration (gpointer user_data)
 	char colbuf[32];
     GtkWidget *p = user_data;
     CPUTempPlugin *c = lxpanel_plugin_get_data (p);
-    sprintf (colbuf, "%s", gdk_rgba_to_string (&c->foreground_color));
+    sprintf (colbuf, "%s", gdk_rgba_to_string (&c->foreground_colour));
     config_group_set_string (c->settings, "Foreground", colbuf);
-    sprintf (colbuf, "%s", gdk_rgba_to_string (&c->background_color));
+    sprintf (colbuf, "%s", gdk_rgba_to_string (&c->background_colour));
     config_group_set_string (c->settings, "Background", colbuf);
-    sprintf (colbuf, "%s", gdk_rgba_to_string (&c->low_throttle_color));
+    sprintf (colbuf, "%s", gdk_rgba_to_string (&c->low_throttle_colour));
     config_group_set_string (c->settings, "Throttle1", colbuf);
-    sprintf (colbuf, "%s", gdk_rgba_to_string (&c->high_throttle_color));
+    sprintf (colbuf, "%s", gdk_rgba_to_string (&c->high_throttle_colour));
     config_group_set_string (c->settings, "Throttle2", colbuf);
     config_group_set_int (c->settings, "HighTemp", c->upper_temp);
     config_group_set_int (c->settings, "LowTemp", c->lower_temp);
@@ -621,10 +692,10 @@ static GtkWidget *cpu_configure (LXPanel *panel, GtkWidget *p)
 
     return lxpanel_generic_config_dlg(_("CPU Temperature"), panel,
         cpu_apply_configuration, p,
-        _("Foreground colour"), &dc->foreground_color, CONF_TYPE_COLOR,
-        _("Background colour"), &dc->background_color, CONF_TYPE_COLOR,
-        _("Colour when ARM frequency capped"), &dc->low_throttle_color, CONF_TYPE_COLOR,
-        _("Colour when throttled"), &dc->high_throttle_color, CONF_TYPE_COLOR,
+        _("Foreground colour"), &dc->foreground_colour, CONF_TYPE_COLOR,
+        _("Background colour"), &dc->background_colour, CONF_TYPE_COLOR,
+        _("Colour when ARM frequency capped"), &dc->low_throttle_colour, CONF_TYPE_COLOR,
+        _("Colour when throttled"), &dc->high_throttle_colour, CONF_TYPE_COLOR,
         _("Lower temperature bound"), &dc->lower_temp, CONF_TYPE_INT,
         _("Upper temperature bound"), &dc->upper_temp, CONF_TYPE_INT,
         NULL);
@@ -641,3 +712,4 @@ LXPanelPluginInit fm_module_init_lxpanel_gtk = {
     .reconfigure = cpu_configuration_changed,
     .gettext_package = GETTEXT_PACKAGE
 };
+#endif
