@@ -66,8 +66,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "cputemp.h"
 
-#define BORDER_SIZE 2
-
 #define PROC_THERMAL_DIRECTORY      "/proc/acpi/thermal_zone/"
 #define PROC_THERMAL_TEMPF          "temperature"
 #define PROC_THERMAL_TRIP           "trip_points"
@@ -76,12 +74,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define SYSFS_THERMAL_SUBDIR_PREFIX "thermal_zone"
 #define SYSFS_THERMAL_TEMPF         "temp"
 
-#ifdef LXPLUG
-static void redraw_pixmap (CPUTempPlugin * c);
-static gboolean cpu_update (CPUTempPlugin * c);
-static gboolean draw (GtkWidget * widget, cairo_t * cr, CPUTempPlugin * c);
-static void cpu_destructor (gpointer user_data);
-#endif
+
 static gboolean is_pi (void)
 {
     if (system ("raspi-config nonint is_pi") == 0)
@@ -267,74 +260,7 @@ static void check_sensors (CPUTempPlugin *c)
     
     g_message ("cputemp: Found %d sensors", c->numsensors);
 }
-#ifdef LXPLUG
-/* Redraw after timer callback or resize. */
-static void redraw_pixmap (CPUTempPlugin * c)
-{
-    cairo_t * cr = cairo_create(c->pixmap);
-    cairo_set_line_width (cr, 1.0);
-    /* Erase pixmap. */
-    cairo_rectangle(cr, 0, 0, c->pixmap_width, c->pixmap_height);
-    cairo_set_source_rgba(cr, c->background_colour.blue,  c->background_colour.green, c->background_colour.red, c->background_colour.alpha);
-    cairo_fill(cr);
 
-    /* Recompute pixmap. */
-    unsigned int i;
-    unsigned int drawing_cursor = c->ring_cursor;
-    for (i = 0; i < c->pixmap_width; i++)
-    {
-        /* Draw one bar of the CPU usage graph. */
-        if (c->stats_cpu[drawing_cursor] != 0.0)
-        {
-            if (c->stats_throttle[drawing_cursor] & 0x8)
-                cairo_set_source_rgba(cr, c->high_throttle_colour.blue,  c->high_throttle_colour.green, c->high_throttle_colour.red, c->high_throttle_colour.alpha);
-            else if (c->stats_throttle[drawing_cursor] & 0x2)
-                cairo_set_source_rgba(cr, c->low_throttle_colour.blue,  c->low_throttle_colour.green, c->low_throttle_colour.red, c->low_throttle_colour.alpha);
-            else
-                cairo_set_source_rgba(cr, c->foreground_colour.blue,  c->foreground_colour.green, c->foreground_colour.red, c->foreground_colour.alpha);
-
-            float val = c->stats_cpu[drawing_cursor] * 100.0;
-            val -= c->lower_temp;
-            val /= (c->upper_temp - c->lower_temp);
-            cairo_move_to (cr, i + 0.5, c->pixmap_height);
-            cairo_line_to (cr, i + 0.5, c->pixmap_height - val * c->pixmap_height);
-            cairo_stroke (cr);
-        }
-
-        /* Increment and wrap drawing cursor. */
-        drawing_cursor += 1;
-        if (drawing_cursor >= c->pixmap_width) drawing_cursor = 0;
-    }
-
-    /* draw a border in black */
-    cairo_set_source_rgb (cr, 0, 0, 0);
-    cairo_set_line_width (cr, 1);
-    cairo_move_to (cr, 0, 0);
-    cairo_line_to (cr, 0, c->pixmap_height);
-    cairo_line_to (cr, c->pixmap_width, c->pixmap_height);
-    cairo_line_to (cr, c->pixmap_width, 0);
-    cairo_line_to (cr, 0, 0);
-    cairo_stroke (cr);
-
-    int fontsize = 12;
-    if (c->pixmap_width > 50) fontsize = c->pixmap_height / 3;
-    char buffer[10];
-    int val = 100 * c->stats_cpu[c->ring_cursor ? c->ring_cursor - 1 : c->pixmap_width - 1];
-    sprintf (buffer, "%3d°", val);
-    cairo_select_font_face (cr, "monospace", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-    cairo_set_font_size (cr, fontsize);
-    cairo_set_source_rgb (cr, 0, 0, 0);
-    cairo_move_to (cr, (c->pixmap_width >> 1) - ((fontsize * 5) / 4), ((c->pixmap_height + fontsize) >> 1) - 1);
-    cairo_show_text (cr, buffer);
-
-    /* check_cairo_status(cr); */
-    cairo_destroy(cr);
-
-    /* Redraw pixmap. */
-    GdkPixbuf *pixbuf = gdk_pixbuf_new_from_data (cairo_image_surface_get_data (c->pixmap), GDK_COLORSPACE_RGB, TRUE, 8, c->pixmap_width, c->pixmap_height, c->pixmap_width *4, NULL, NULL);
-    gtk_image_set_from_pixbuf (GTK_IMAGE (c->da), pixbuf);
-}
-#endif
 static gint get_temperature (CPUTempPlugin *c)
 {
     gint max = -273, cur, i;
@@ -382,109 +308,8 @@ static int get_throttle (void)
     g_free (buf);
     return val;
 }
-#ifdef LXPLUG
-/* Periodic timer callback. */
-static gboolean cpu_update (CPUTempPlugin *c)
-{
-    if (g_source_is_destroyed (g_main_current_source ()))
-        return FALSE;
 
-    int t = get_temperature (c);
-    c->stats_cpu[c->ring_cursor] = t / 100.0;
-    c->stats_throttle[c->ring_cursor] = c->ispi ? get_throttle () : 0;
-    c->ring_cursor += 1;
-    if (c->ring_cursor >= c->pixmap_width) c->ring_cursor = 0;
 
-    redraw_pixmap (c);
-    return TRUE;
-}
-
-/* Handler for configure_event on drawing area. */
-static void cpu_configuration_changed (LXPanel *panel, GtkWidget *p)
-{
-    CPUTempPlugin *c = lxpanel_plugin_get_data (p);
-
-    /* Allocate pixmap and statistics buffer without border pixels. */
-    guint new_pixmap_height = panel_get_icon_size (panel) - (BORDER_SIZE << 1);
-    guint new_pixmap_width = (new_pixmap_height * 3) >> 1;
-    if (new_pixmap_width < 50) new_pixmap_width = 50;
-    if ((new_pixmap_width > 0) && (new_pixmap_height > 0))
-    {
-        /* If statistics buffer does not exist or it changed size, reallocate and preserve existing data. */
-        if ((c->stats_cpu == NULL) || (new_pixmap_width != c->pixmap_width))
-        {
-            float *new_stats_cpu = g_new0 (float, new_pixmap_width);
-            int *new_stats_throttle = g_new0 (int, new_pixmap_width);
-            if (c->stats_cpu != NULL)
-            {
-                if (new_pixmap_width > c->pixmap_width)
-                {
-                    /* New allocation is larger.
-                     * Introduce new "oldest" samples of zero following the cursor. */
-                    memcpy (&new_stats_cpu[0],
-                        &c->stats_cpu[0], c->ring_cursor * sizeof (float));
-                    memcpy (&new_stats_cpu[new_pixmap_width - c->pixmap_width + c->ring_cursor],
-                        &c->stats_cpu[c->ring_cursor], (c->pixmap_width - c->ring_cursor) * sizeof (float));
-                    memcpy (&new_stats_throttle[0],
-                        &c->stats_throttle[0], c->ring_cursor * sizeof (int));
-                    memcpy (&new_stats_throttle[new_pixmap_width - c->pixmap_width + c->ring_cursor],
-                        &c->stats_throttle[c->ring_cursor], (c->pixmap_width - c->ring_cursor) * sizeof (int));
-                }
-                else if (c->ring_cursor <= new_pixmap_width)
-                {
-                    /* New allocation is smaller, but still larger than the ring buffer cursor.
-                     * Discard the oldest samples following the cursor. */
-                    memcpy (&new_stats_cpu[0],
-                        &c->stats_cpu[0], c->ring_cursor * sizeof (float));
-                    memcpy (&new_stats_cpu[c->ring_cursor],
-                        &c->stats_cpu[c->pixmap_width - new_pixmap_width + c->ring_cursor], (new_pixmap_width - c->ring_cursor) * sizeof (float));
-                    memcpy (&new_stats_throttle[0],
-                        &c->stats_throttle[0], c->ring_cursor * sizeof (int));
-                    memcpy (&new_stats_throttle[c->ring_cursor],
-                        &c->stats_throttle[c->pixmap_width - new_pixmap_width + c->ring_cursor], (new_pixmap_width - c->ring_cursor) * sizeof (int));
-                }
-                else
-                {
-                    /* New allocation is smaller, and also smaller than the ring buffer cursor.
-                     * Discard all oldest samples following the ring buffer cursor and additional samples at the beginning of the buffer. */
-                    memcpy (&new_stats_cpu[0],
-                        &c->stats_cpu[c->ring_cursor - new_pixmap_width], new_pixmap_width * sizeof (float));
-                    memcpy (&new_stats_throttle[0],
-                        &c->stats_throttle[c->ring_cursor - new_pixmap_width], new_pixmap_width * sizeof (int));
-                    c->ring_cursor = 0;
-                }
-                g_free (c->stats_cpu);
-                g_free (c->stats_throttle);
-            }
-            c->stats_cpu = new_stats_cpu;
-            c->stats_throttle = new_stats_throttle;
-        }
-
-        /* Allocate or reallocate pixmap. */
-        c->pixmap_width = new_pixmap_width;
-        c->pixmap_height = new_pixmap_height;
-        if (c->pixmap) cairo_surface_destroy (c->pixmap);
-        c->pixmap = cairo_image_surface_create (CAIRO_FORMAT_RGB24, c->pixmap_width, c->pixmap_height);
-
-        /* Redraw pixmap at the new size. */
-        redraw_pixmap (c);
-    }
-}
-
-/* Handler for expose_event on drawing area. */
-static gboolean draw (GtkWidget * widget, cairo_t * cr, CPUTempPlugin * c)
-{
-    /* Draw the requested part of the pixmap onto the drawing area.
-     * Translate it in both x and y by the border size. */
-    if (c->pixmap != NULL)
-    {
-        cairo_set_source_rgb (cr, 0, 0, 0); // FIXME: use black colour from style
-        cairo_set_source_surface (cr, c->pixmap, BORDER_SIZE, BORDER_SIZE);
-        cairo_paint (cr);
-    }
-    return FALSE;
-}
-#else
 /* Periodic timer callback */
 
 static gboolean cpu_update (CPUTempPlugin *c)
@@ -516,6 +341,7 @@ static gboolean cpu_update (CPUTempPlugin *c)
     return TRUE;
 }
 
+#ifndef LXPLUG
 static void cputemp_gesture_pressed (GtkGestureLongPress *, gdouble x, gdouble y, CPUTempPlugin *)
 {
     pressed = PRESS_LONG;
@@ -527,21 +353,30 @@ static void cputemp_gesture_end (GtkGestureLongPress *, GdkEventSequence *, CPUT
 {
     if (pressed == PRESS_LONG) pass_right_click (c->plugin, press_x, press_y);
 }
+#endif
 
+#ifdef LXPLUG
+static void cpu_configuration_changed (LXPanel *, GtkWidget *p)
+{
+    CPUTempPlugin *c = lxpanel_plugin_get_data (p);
+#else
 void cputemp_update_display (CPUTempPlugin *c)
 {
-    graph_reload (&(c->graph), c->icon_size, c->background_colour, c->foreground_colour,
+#endif
+    graph_reload (&(c->graph), wrap_icon_size(c), c->background_colour, c->foreground_colour,
         c->low_throttle_colour, c->high_throttle_colour);
 }
 
+/* Plugin destructor. */
 void cputemp_destructor (gpointer user_data)
 {
     CPUTempPlugin *c = (CPUTempPlugin *) user_data;
     if (c->timer) g_source_remove (c->timer);
+#ifndef LXPLUG
     if (c->gesture) g_object_unref (c->gesture);
+#endif
     g_free (c);
 }
-#endif
 
 /* Plugin constructor. */
 
@@ -561,25 +396,20 @@ static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
     c->panel = panel;
     c->settings = settings;
     c->plugin = gtk_event_box_new ();
-    lxpanel_plugin_set_data (c->plugin, c, cpu_destructor);
-
-    /* Allocate icon as a child of top level */
-    c->da = gtk_image_new ();
-    gtk_container_add (GTK_CONTAINER (c->plugin), c->da);
+    lxpanel_plugin_set_data (c->plugin, c, cputemp_destructor);
 #else
 
 void cputemp_init (CPUTempPlugin *c)
 {
+#endif
     /* Allocate icon as a child of top level */
     graph_init (&(c->graph));
     gtk_container_add (GTK_CONTAINER (c->plugin), c->graph.da);
-#endif
-
 
     /* Set up variables */
     c->ispi = is_pi ();
-#ifdef LXPLUG
 
+#ifdef LXPLUG
     if (config_setting_lookup_string (settings, "Foreground", &str))
     {
         if (!gdk_rgba_parse (&c->foreground_colour, str))
@@ -623,11 +453,6 @@ void cputemp_init (CPUTempPlugin *c)
 
 
 #ifdef LXPLUG
-    /* Connect signals. */
-    g_signal_connect(G_OBJECT (c->da), "draw", G_CALLBACK (draw), (gpointer) c);
-
-    /* Initialise buffers */
-    c->stats_cpu = NULL;
     cpu_configuration_changed (panel, c->plugin);
 #else
     cputemp_update_display (c);
@@ -652,24 +477,9 @@ void cputemp_init (CPUTempPlugin *c)
 
 #ifdef LXPLUG
 
-/* Plugin destructor. */
-static void cpu_destructor (gpointer user_data)
-{
-    CPUTempPlugin *c = (CPUTempPlugin *) user_data;
-
-    /* Disconnect the timer. */
-    g_source_remove (c->timer);
-
-    /* Deallocate memory. */
-    cairo_surface_destroy (c->pixmap);
-    g_free (c->stats_cpu);
-    g_free (c->stats_throttle);
-    g_free (c);
-}
-
 static gboolean cpu_apply_configuration (gpointer user_data)
 {
-	char colbuf[32];
+    char colbuf[32];
     GtkWidget *p = user_data;
     CPUTempPlugin *c = lxpanel_plugin_get_data (p);
     sprintf (colbuf, "%s", gdk_rgba_to_string (&c->foreground_colour));

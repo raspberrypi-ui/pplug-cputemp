@@ -10,21 +10,12 @@ typedef struct
 #ifdef LXPLUG
     LXPanel *panel;                         /* Back pointer to panel */
     config_setting_t *settings;
-
-    GtkWidget *da;				            /* Drawing area */
-    cairo_surface_t *pixmap;				/* Pixmap to be drawn on drawing area */
-    float *stats_cpu;			            /* Ring buffer of temperature values */
-    int *stats_throttle;                    /* Ring buffer of throttle status */
-    unsigned int ring_cursor;			    /* Cursor for ring buffer */
-    guint pixmap_width;				        /* Width of drawing area pixmap; also size of ring buffer; does not include border size */
-    guint pixmap_height;			        /* Height of drawing area pixmap; does not include border size */
 #else
     int icon_size;                          /* Variables used under wf-panel */
     gboolean bottom;
     GtkGesture *gesture;
-
-    PluginGraph graph;
 #endif
+    PluginGraph graph;
     guint timer;                            /* Timer for periodic update */
     int numsensors;
     char *sensor_array[MAX_NUM_SENSORS];
