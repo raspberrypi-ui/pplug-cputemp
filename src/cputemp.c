@@ -45,23 +45,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef LXPLUG
 #include "plugin.h"
-#define wrap_new_menu_item(plugin,text,maxlen,icon) lxpanel_plugin_new_menu_item(plugin->panel,text,maxlen,icon)
-#define wrap_set_menu_icon(plugin,image,icon) lxpanel_plugin_set_menu_icon(plugin->panel,image,icon)
-#define wrap_set_taskbar_icon(plugin,image,icon) lxpanel_plugin_set_taskbar_icon(plugin->panel,image,icon)
-#define wrap_show_menu(plugin,menu) gtk_menu_popup_at_widget(GTK_MENU(menu),plugin,GDK_GRAVITY_SOUTH_WEST,GDK_GRAVITY_NORTH_WEST,NULL)
-#define wrap_icon_size(plugin) panel_get_safe_icon_size(plugin->panel)
-#define wrap_is_at_bottom(plugin) panel_is_at_bottom(plugin->panel)
 #else
 #include "lxutils.h"
-#define lxpanel_notify(panel,msg) lxpanel_notify(msg)
-#define lxpanel_plugin_update_menu_icon(item,icon) update_menu_icon(item,icon)
-#define lxpanel_plugin_append_menu_icon(item,icon) append_menu_icon(item,icon)
-#define wrap_new_menu_item(plugin,text,maxlen,icon) new_menu_item(text,maxlen,icon,plugin->icon_size)
-#define wrap_set_menu_icon(plugin,image,icon) set_menu_icon(image,icon,plugin->icon_size)
-#define wrap_set_taskbar_icon(plugin,image,icon) set_taskbar_icon(image,icon,plugin->icon_size)
-#define wrap_show_menu(plugin,menu) show_menu_with_kbd(plugin,menu)
-#define wrap_icon_size(plugin) (plugin->icon_size)
-#define wrap_is_at_bottom(plugin) (plugin->bottom)
 #endif
 
 #include "cputemp.h"
@@ -371,6 +356,7 @@ void cputemp_update_display (CPUTempPlugin *c)
 void cputemp_destructor (gpointer user_data)
 {
     CPUTempPlugin *c = (CPUTempPlugin *) user_data;
+    graph_free (&(c->graph));
     if (c->timer) g_source_remove (c->timer);
 #ifndef LXPLUG
     if (c->gesture) g_object_unref (c->gesture);
