@@ -1,14 +1,21 @@
-/*
- * CPU temperature plugin for LXPanel
- *
- * Based on 'cpu' and 'thermal' plugin code from LXPanel
- * Copyright for relevant code as for LXPanel
- *
- */
-
-/*
-Copyright (c) 2018 Raspberry Pi (Trading) Ltd.
+/*============================================================================
+Copyright (c) 2018-2025 Raspberry Pi Holdings Ltd.
 All rights reserved.
+
+Some code taken from the lxpanel project
+
+Copyright (c) 2006-2010 Hong Jen Yee (PCMan) <pcman.tw@gmail.com>
+            2006-2008 Jim Huang <jserv.tw@gmail.com>
+            2008 Fred Chien <fred@lxde.org>
+            2009 Ying-Chun Liu (PaulLiu) <grandpaul@gmail.com>
+            2009-2010 Marty Jack <martyj19@comcast.net>
+            2010 Jürgen Hötzel <juergen@archlinux.org>
+            2010-2011 Julien Lavergne <julien.lavergne@gmail.com>
+            2012-2013 Henry Gebhardt <hsggebhardt@gmail.com>
+            2012 Michael Rawson <michaelrawson76@gmail.com>
+            2014 Max Krummenacher <max.oss.09@gmail.com>
+            2014 SHiNE CsyFeK <csyfek@users.sourceforge.net>
+            2014 Andriy Grytsenko <andrej@rep.kiev.ua>
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -31,9 +38,10 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+============================================================================*/
 
 #define _GNU_SOURCE
+
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
@@ -50,6 +58,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #include "cputemp.h"
+
+/*----------------------------------------------------------------------------*/
+/* Typedefs and macros */
+/*----------------------------------------------------------------------------*/
 
 #define PROC_THERMAL_DIRECTORY      "/proc/acpi/thermal_zone/"
 #define PROC_THERMAL_TEMPF          "temperature"
@@ -326,7 +338,14 @@ static gboolean cpu_update (CPUTempPlugin *c)
     return TRUE;
 }
 
+
+/*----------------------------------------------------------------------------*/
+/* wf-panel plugin functions                                                  */
+/*----------------------------------------------------------------------------*/
+
 #ifndef LXPLUG
+
+/* Handler for long press gesture */
 static void cputemp_gesture_pressed (GtkGestureLongPress *, gdouble x, gdouble y, CPUTempPlugin *)
 {
     pressed = PRESS_LONG;
@@ -340,39 +359,110 @@ static void cputemp_gesture_end (GtkGestureLongPress *, GdkEventSequence *, CPUT
 }
 #endif
 
-#ifdef LXPLUG
-static void cpu_configuration_changed (LXPanel *, GtkWidget *p)
-{
-    CPUTempPlugin *c = lxpanel_plugin_get_data (p);
-#else
+/* Handler for system config changed message from panel */
 void cputemp_update_display (CPUTempPlugin *c)
 {
-#endif
     graph_reload (&(c->graph), wrap_icon_size(c), c->background_colour, c->foreground_colour,
         c->low_throttle_colour, c->high_throttle_colour);
 }
 
-/* Plugin destructor. */
+void cputemp_init (CPUTempPlugin *c)
+{
+    /* Allocate icon as a child of top level */
+    graph_init (&(c->graph));
+    gtk_container_add (GTK_CONTAINER (c->plugin), c->graph.da);
+
+    /* Set up variables */
+    c->ispi = is_pi ();
+    
+#ifdef LXPLUG
+    /* Read settings */
+    const char *str;
+    int val;
+
+    if (config_setting_lookup_string (c->settings, "Foreground", &str))
+    {
+        if (!gdk_rgba_parse (&c->foreground_colour, str))
+            gdk_rgba_parse (&c->foreground_colour, "dark gray");
+    } else gdk_rgba_parse (&c->foreground_colour, "dark gray");
+
+    if (config_setting_lookup_string (c->settings, "Background", &str))
+    {
+        if (!gdk_rgba_parse (&c->background_colour, str))
+            gdk_rgba_parse (&c->background_colour, "light gray");
+    } else gdk_rgba_parse (&c->background_colour, "light gray");
+
+    if (config_setting_lookup_string (c->settings, "Throttle1", &str))
+    {
+        if (!gdk_rgba_parse (&c->low_throttle_colour, str))
+            gdk_rgba_parse (&c->low_throttle_colour, "orange");
+    } else gdk_rgba_parse (&c->low_throttle_colour, "orange");
+
+    if (config_setting_lookup_string (c->settings, "Throttle2", &str))
+    {
+        if (!gdk_rgba_parse (&c->high_throttle_colour, str))
+            gdk_rgba_parse (&c->high_throttle_colour, "red");
+    } else gdk_rgba_parse (&c->high_throttle_colour, "red");
+
+    if (config_setting_lookup_int (c->settings, "LowTemp", &val))
+    {
+        if (val >= 0 && val <= 100) c->lower_temp = val;
+        else c->lower_temp = 40;
+    }
+    else c->lower_temp = 40;
+
+    if (config_setting_lookup_int (c->settings, "HighTemp", &val))
+    {
+        if (val >= 0 && val <= 150 && val > c->lower_temp) c->upper_temp = val;
+        else c->upper_temp = 90;
+    }
+    else c->upper_temp = 90;    
+#endif    
+
+    /* Find the system thermal sensors */
+    check_sensors (c);
+
+#ifndef LXPLUG
+    /* Set up long press */
+    c->gesture = gtk_gesture_long_press_new (c->plugin);
+    gtk_gesture_single_set_touch_only (GTK_GESTURE_SINGLE (c->gesture), touch_only);
+    g_signal_connect (c->gesture, "pressed", G_CALLBACK (cputemp_gesture_pressed), c);
+    g_signal_connect (c->gesture, "end", G_CALLBACK (cputemp_gesture_end), c);
+    gtk_event_controller_set_propagation_phase (GTK_EVENT_CONTROLLER (c->gesture), GTK_PHASE_BUBBLE);
+#endif
+
+    cputemp_update_display (c);
+
+    /* Connect a timer to refresh the statistics. */
+    c->timer = g_timeout_add (1500, (GSourceFunc) cpu_update, (gpointer) c);
+
+    /* Show the widget and return. */
+    gtk_widget_show_all (c->plugin);
+}
+
 void cputemp_destructor (gpointer user_data)
 {
     CPUTempPlugin *c = (CPUTempPlugin *) user_data;
+
     graph_free (&(c->graph));
     if (c->timer) g_source_remove (c->timer);
+
 #ifndef LXPLUG
     if (c->gesture) g_object_unref (c->gesture);
 #endif
     g_free (c);
 }
 
-/* Plugin constructor. */
-
+/*----------------------------------------------------------------------------*/
+/* LXPanel plugin functions                                                   */
+/*----------------------------------------------------------------------------*/
 #ifdef LXPLUG
+
+/* Constructor */
 static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
 {
     /* Allocate and initialize plugin context */
     CPUTempPlugin *c = g_new0 (CPUTempPlugin, 1);
-    const char *str;
-    int val;
 
     setlocale (LC_ALL, "");
     bindtextdomain (GETTEXT_PACKAGE, PACKAGE_LOCALE_DIR);
@@ -383,91 +473,25 @@ static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
     c->settings = settings;
     c->plugin = gtk_event_box_new ();
     lxpanel_plugin_set_data (c->plugin, c, cputemp_destructor);
-#else
 
-void cputemp_init (CPUTempPlugin *c)
-{
-#endif
-    /* Allocate icon as a child of top level */
-    graph_init (&(c->graph));
-    gtk_container_add (GTK_CONTAINER (c->plugin), c->graph.da);
+    cputemp_init (c);
 
-    /* Set up variables */
-    c->ispi = is_pi ();
-
-#ifdef LXPLUG
-    if (config_setting_lookup_string (settings, "Foreground", &str))
-    {
-        if (!gdk_rgba_parse (&c->foreground_colour, str))
-            gdk_rgba_parse (&c->foreground_colour, "dark gray");
-    } else gdk_rgba_parse (&c->foreground_colour, "dark gray");
-
-    if (config_setting_lookup_string (settings, "Background", &str))
-    {
-        if (!gdk_rgba_parse (&c->background_colour, str))
-            gdk_rgba_parse (&c->background_colour, "light gray");
-    } else gdk_rgba_parse (&c->background_colour, "light gray");
-
-    if (config_setting_lookup_string (settings, "Throttle1", &str))
-    {
-        if (!gdk_rgba_parse (&c->low_throttle_colour, str))
-            gdk_rgba_parse (&c->low_throttle_colour, "orange");
-    } else gdk_rgba_parse (&c->low_throttle_colour, "orange");
-
-    if (config_setting_lookup_string (settings, "Throttle2", &str))
-    {
-        if (!gdk_rgba_parse (&c->high_throttle_colour, str))
-            gdk_rgba_parse (&c->high_throttle_colour, "red");
-    } else gdk_rgba_parse (&c->high_throttle_colour, "red");
-
-    if (config_setting_lookup_int (settings, "LowTemp", &val))
-    {
-        if (val >= 0 && val <= 100) c->lower_temp = val;
-        else c->lower_temp = 40;
-    }
-    else c->lower_temp = 40;
-
-    if (config_setting_lookup_int (settings, "HighTemp", &val))
-    {
-        if (val >= 0 && val <= 150 && val > c->lower_temp) c->upper_temp = val;
-        else c->upper_temp = 90;
-    }
-    else c->upper_temp = 90;
-#endif
-    /* Find the system thermal sensors */
-    check_sensors (c);
-
-
-#ifdef LXPLUG
-    cpu_configuration_changed (panel, c->plugin);
-#else
-    cputemp_update_display (c);
-
-    /* Set up long press */
-    c->gesture = gtk_gesture_long_press_new (c->plugin);
-    gtk_gesture_single_set_touch_only (GTK_GESTURE_SINGLE (c->gesture), touch_only);
-    g_signal_connect (c->gesture, "pressed", G_CALLBACK (cputemp_gesture_pressed), c);
-    g_signal_connect (c->gesture, "end", G_CALLBACK (cputemp_gesture_end), c);
-    gtk_event_controller_set_propagation_phase (GTK_EVENT_CONTROLLER (c->gesture), GTK_PHASE_BUBBLE);
-#endif
-
-    /* Connect a timer to refresh the statistics. */
-    c->timer = g_timeout_add (1500, (GSourceFunc) cpu_update, (gpointer) c);
-
-    /* Show the widget and return. */
-    gtk_widget_show_all (c->plugin);
-#ifdef LXPLUG
     return c->plugin;
-#endif
 }
 
-#ifdef LXPLUG
+/* Handler for system config changed message from panel */
+static void cpu_configuration_changed (LXPanel *, GtkWidget *p)
+{
+    CPUTempPlugin *c = lxpanel_plugin_get_data (p);
+    cputemp_update_display (c);
+}
 
+/* Apply changes from config dialog */
 static gboolean cpu_apply_configuration (gpointer user_data)
 {
+    CPUTempPlugin *c = lxpanel_plugin_get_data (GTK_WIDGET (user_data));
     char colbuf[32];
-    GtkWidget *p = user_data;
-    CPUTempPlugin *c = lxpanel_plugin_get_data (p);
+
     sprintf (colbuf, "%s", gdk_rgba_to_string (&c->foreground_colour));
     config_group_set_string (c->settings, "Foreground", colbuf);
     sprintf (colbuf, "%s", gdk_rgba_to_string (&c->background_colour));
@@ -481,25 +505,25 @@ static gboolean cpu_apply_configuration (gpointer user_data)
     return FALSE;
 }
 
-/* Callback when the configuration dialog is to be shown. */
+/* Display configuration dialog */
 static GtkWidget *cpu_configure (LXPanel *panel, GtkWidget *p)
 {
-    CPUTempPlugin * dc = lxpanel_plugin_get_data(p);
+    CPUTempPlugin *c = lxpanel_plugin_get_data (p);
 
     return lxpanel_generic_config_dlg(_("CPU Temperature"), panel,
         cpu_apply_configuration, p,
-        _("Foreground colour"), &dc->foreground_colour, CONF_TYPE_COLOR,
-        _("Background colour"), &dc->background_colour, CONF_TYPE_COLOR,
-        _("Colour when ARM frequency capped"), &dc->low_throttle_colour, CONF_TYPE_COLOR,
-        _("Colour when throttled"), &dc->high_throttle_colour, CONF_TYPE_COLOR,
-        _("Lower temperature bound"), &dc->lower_temp, CONF_TYPE_INT,
-        _("Upper temperature bound"), &dc->upper_temp, CONF_TYPE_INT,
+        _("Foreground colour"), &c->foreground_colour, CONF_TYPE_COLOR,
+        _("Background colour"), &c->background_colour, CONF_TYPE_COLOR,
+        _("Colour when ARM frequency capped"), &c->low_throttle_colour, CONF_TYPE_COLOR,
+        _("Colour when throttled"), &c->high_throttle_colour, CONF_TYPE_COLOR,
+        _("Lower temperature bound"), &c->lower_temp, CONF_TYPE_INT,
+        _("Upper temperature bound"), &c->upper_temp, CONF_TYPE_INT,
         NULL);
 }
 
 FM_DEFINE_MODULE (lxpanel_gtk, cputemp)
 
-/* Plugin descriptor. */
+/* Plugin descriptor */
 LXPanelPluginInit fm_module_init_lxpanel_gtk = {
     .name = N_("CPU Temperature Monitor"),
     .config = cpu_configure,
@@ -509,3 +533,6 @@ LXPanelPluginInit fm_module_init_lxpanel_gtk = {
     .gettext_package = GETTEXT_PACKAGE
 };
 #endif
+
+/* End of file */
+/*----------------------------------------------------------------------------*/
