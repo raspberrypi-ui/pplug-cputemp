@@ -352,22 +352,6 @@ static gboolean cpu_update (CPUTempPlugin *c)
 /* wf-panel plugin functions                                                  */
 /*----------------------------------------------------------------------------*/
 
-#ifndef LXPLUG
-
-/* Handler for long press gesture */
-static void cputemp_gesture_pressed (GtkGestureLongPress *, gdouble x, gdouble y, CPUTempPlugin *)
-{
-    pressed = PRESS_LONG;
-    press_x = x;
-    press_y = y;
-}
-
-static void cputemp_gesture_end (GtkGestureLongPress *, GdkEventSequence *, CPUTempPlugin *c)
-{
-    if (pressed == PRESS_LONG) pass_right_click (c->plugin, press_x, press_y);
-}
-#endif
-
 /* Handler for system config changed message from panel */
 void cputemp_update_display (CPUTempPlugin *c)
 {
@@ -433,11 +417,7 @@ void cputemp_init (CPUTempPlugin *c)
 
 #ifndef LXPLUG
     /* Set up long press */
-    c->gesture = gtk_gesture_long_press_new (c->plugin);
-    gtk_gesture_single_set_touch_only (GTK_GESTURE_SINGLE (c->gesture), touch_only);
-    g_signal_connect (c->gesture, "pressed", G_CALLBACK (cputemp_gesture_pressed), c);
-    g_signal_connect (c->gesture, "end", G_CALLBACK (cputemp_gesture_end), c);
-    gtk_event_controller_set_propagation_phase (GTK_EVENT_CONTROLLER (c->gesture), GTK_PHASE_BUBBLE);
+    c->gesture = add_long_press (c->plugin);
 #endif
 
     cputemp_update_display (c);
