@@ -417,7 +417,7 @@ void cputemp_init (CPUTempPlugin *c)
 
 #ifndef LXPLUG
     /* Set up long press */
-    c->gesture = add_long_press (c->plugin);
+    c->gesture = add_long_press (c->plugin, NULL, NULL);
 #endif
 
     cputemp_update_display (c);
