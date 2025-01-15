@@ -469,9 +469,9 @@ static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
 }
 
 /* Handler for system config changed message from panel */
-static void cpu_configuration_changed (LXPanel *, GtkWidget *p)
+static void cpu_configuration_changed (LXPanel *, GtkWidget *plugin)
 {
-    CPUTempPlugin *c = lxpanel_plugin_get_data (p);
+    CPUTempPlugin *c = lxpanel_plugin_get_data (plugin);
     cputemp_update_display (c);
 }
 
@@ -495,12 +495,12 @@ static gboolean cpu_apply_configuration (gpointer user_data)
 }
 
 /* Display configuration dialog */
-static GtkWidget *cpu_configure (LXPanel *panel, GtkWidget *p)
+static GtkWidget *cpu_configure (LXPanel *panel, GtkWidget *plugin)
 {
-    CPUTempPlugin *c = lxpanel_plugin_get_data (p);
+    CPUTempPlugin *c = lxpanel_plugin_get_data (plugin);
 
     return lxpanel_generic_config_dlg(_("CPU Temperature"), panel,
-        cpu_apply_configuration, p,
+        cpu_apply_configuration, plugin,
         _("Foreground colour"), &c->foreground_colour, CONF_TYPE_COLOR,
         _("Background colour"), &c->background_colour, CONF_TYPE_COLOR,
         _("Colour when ARM frequency capped"), &c->low_throttle_colour, CONF_TYPE_COLOR,
