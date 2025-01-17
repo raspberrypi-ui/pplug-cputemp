@@ -58,7 +58,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cputemp.h"
 
 /*----------------------------------------------------------------------------*/
-/* Typedefs and macros */
+/* Typedefs and macros                                                        */
 /*----------------------------------------------------------------------------*/
 
 #define PROC_THERMAL_DIRECTORY      "/proc/acpi/thermal_zone/"

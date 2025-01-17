@@ -25,10 +25,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ============================================================================*/
 
-/*----------------------------------------------------------------------------*/
-/* Typedefs and macros */
-/*----------------------------------------------------------------------------*/
-
 #define MAX_NUM_SENSORS 10
 
 typedef gint (*GetTempFunc) (char const *);
