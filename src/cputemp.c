@@ -361,6 +361,10 @@ void cputemp_update_display (CPUTempPlugin *c)
 
 void cputemp_init (CPUTempPlugin *c)
 {
+    setlocale (LC_ALL, "");
+    bindtextdomain (GETTEXT_PACKAGE, PACKAGE_LOCALE_DIR);
+    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+
     /* Allocate icon as a child of top level */
     graph_init (&(c->graph));
     gtk_container_add (GTK_CONTAINER (c->plugin), c->graph.da);
@@ -452,10 +456,6 @@ static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
 {
     /* Allocate and initialize plugin context */
     CPUTempPlugin *c = g_new0 (CPUTempPlugin, 1);
-
-    setlocale (LC_ALL, "");
-    bindtextdomain (GETTEXT_PACKAGE, PACKAGE_LOCALE_DIR);
-    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 
     /* Allocate top level widget and set into plugin widget pointer. */
     c->panel = panel;
