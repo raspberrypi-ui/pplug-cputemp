@@ -104,6 +104,7 @@ void WayfireCPUTemp::init (Gtk::HBox *container)
     /* Setup callbacks */
     icon_size.set_callback (sigc::mem_fun (*this, &WayfireCPUTemp::icon_size_changed_cb));
     bar_pos.set_callback (sigc::mem_fun (*this, &WayfireCPUTemp::bar_pos_changed_cb));
+
     foreground_colour.set_callback (sigc::mem_fun (*this, &WayfireCPUTemp::settings_changed_cb));
     background_colour.set_callback (sigc::mem_fun (*this, &WayfireCPUTemp::settings_changed_cb));
     throttle1_colour.set_callback (sigc::mem_fun (*this, &WayfireCPUTemp::settings_changed_cb));

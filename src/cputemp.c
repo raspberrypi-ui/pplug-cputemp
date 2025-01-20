@@ -372,50 +372,6 @@ void cputemp_init (CPUTempPlugin *c)
     /* Set up variables */
     c->ispi = is_pi ();
     
-#ifdef LXPLUG
-    /* Read settings */
-    const char *str;
-    int val;
-
-    if (config_setting_lookup_string (c->settings, "Foreground", &str))
-    {
-        if (!gdk_rgba_parse (&c->foreground_colour, str))
-            gdk_rgba_parse (&c->foreground_colour, "dark gray");
-    } else gdk_rgba_parse (&c->foreground_colour, "dark gray");
-
-    if (config_setting_lookup_string (c->settings, "Background", &str))
-    {
-        if (!gdk_rgba_parse (&c->background_colour, str))
-            gdk_rgba_parse (&c->background_colour, "light gray");
-    } else gdk_rgba_parse (&c->background_colour, "light gray");
-
-    if (config_setting_lookup_string (c->settings, "Throttle1", &str))
-    {
-        if (!gdk_rgba_parse (&c->low_throttle_colour, str))
-            gdk_rgba_parse (&c->low_throttle_colour, "orange");
-    } else gdk_rgba_parse (&c->low_throttle_colour, "orange");
-
-    if (config_setting_lookup_string (c->settings, "Throttle2", &str))
-    {
-        if (!gdk_rgba_parse (&c->high_throttle_colour, str))
-            gdk_rgba_parse (&c->high_throttle_colour, "red");
-    } else gdk_rgba_parse (&c->high_throttle_colour, "red");
-
-    if (config_setting_lookup_int (c->settings, "LowTemp", &val))
-    {
-        if (val >= 0 && val <= 100) c->lower_temp = val;
-        else c->lower_temp = 40;
-    }
-    else c->lower_temp = 40;
-
-    if (config_setting_lookup_int (c->settings, "HighTemp", &val))
-    {
-        if (val >= 0 && val <= 150 && val > c->lower_temp) c->upper_temp = val;
-        else c->upper_temp = 90;
-    }
-    else c->upper_temp = 90;    
-#endif    
-
     /* Find the system thermal sensors */
     check_sensors (c);
 
@@ -423,6 +379,10 @@ void cputemp_init (CPUTempPlugin *c)
     /* Set up long press */
     c->gesture = add_long_press (c->plugin, NULL, NULL);
 #endif
+
+    /* Constrain temperatures */
+    if (c->lower_temp < 0 || c->lower_temp > 100) c->lower_temp = 40;
+    if (c->upper_temp < 0 || c->upper_temp > 150) c->upper_temp = 90;
 
     cputemp_update_display (c);
 
@@ -454,6 +414,8 @@ void cputemp_destructor (gpointer user_data)
 /* Constructor */
 static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
 {
+    const char *str;
+
     /* Allocate and initialize plugin context */
     CPUTempPlugin *c = g_new0 (CPUTempPlugin, 1);
 
@@ -462,6 +424,34 @@ static GtkWidget *cpu_constructor (LXPanel *panel, config_setting_t *settings)
     c->settings = settings;
     c->plugin = gtk_event_box_new ();
     lxpanel_plugin_set_data (c->plugin, c, cputemp_destructor);
+
+    /* Read config */
+    if (!config_setting_lookup_int (c->settings, "LowTemp", &c->lower_temp)) c->lower_temp = 40;
+    if (!config_setting_lookup_int (c->settings, "HighTemp", &c->upper_temp)) c->upper_temp = 90;
+
+    if (config_setting_lookup_string (c->settings, "Foreground", &str))
+    {
+        if (!gdk_rgba_parse (&c->foreground_colour, str))
+            gdk_rgba_parse (&c->foreground_colour, "dark gray");
+    } else gdk_rgba_parse (&c->foreground_colour, "dark gray");
+
+    if (config_setting_lookup_string (c->settings, "Background", &str))
+    {
+        if (!gdk_rgba_parse (&c->background_colour, str))
+            gdk_rgba_parse (&c->background_colour, "light gray");
+    } else gdk_rgba_parse (&c->background_colour, "light gray");
+
+    if (config_setting_lookup_string (c->settings, "Throttle1", &str))
+    {
+        if (!gdk_rgba_parse (&c->low_throttle_colour, str))
+            gdk_rgba_parse (&c->low_throttle_colour, "orange");
+    } else gdk_rgba_parse (&c->low_throttle_colour, "orange");
+
+    if (config_setting_lookup_string (c->settings, "Throttle2", &str))
+    {
+        if (!gdk_rgba_parse (&c->high_throttle_colour, str))
+            gdk_rgba_parse (&c->high_throttle_colour, "red");
+    } else gdk_rgba_parse (&c->high_throttle_colour, "red");
 
     cputemp_init (c);
 
@@ -481,6 +471,10 @@ static gboolean cpu_apply_configuration (gpointer user_data)
     CPUTempPlugin *c = lxpanel_plugin_get_data (GTK_WIDGET (user_data));
     char colbuf[32];
 
+    /* Constrain temperatures */
+    if (c->lower_temp < 0 || c->lower_temp > 100) c->lower_temp = 40;
+    if (c->upper_temp < 0 || c->upper_temp > 150) c->upper_temp = 90;
+
     sprintf (colbuf, "%s", gdk_rgba_to_string (&c->foreground_colour));
     config_group_set_string (c->settings, "Foreground", colbuf);
     sprintf (colbuf, "%s", gdk_rgba_to_string (&c->background_colour));
@@ -491,6 +485,8 @@ static gboolean cpu_apply_configuration (gpointer user_data)
     config_group_set_string (c->settings, "Throttle2", colbuf);
     config_group_set_int (c->settings, "HighTemp", c->upper_temp);
     config_group_set_int (c->settings, "LowTemp", c->lower_temp);
+
+    cputemp_update_display (c);
     return FALSE;
 }
 
