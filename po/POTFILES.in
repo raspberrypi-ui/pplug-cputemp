@@ -1,2 +1,5 @@
 [encoding: UTF-8]
-plugins/cputemp/cputemp.c
+src/cputemp.c
+src/cputemp.cpp
+src/cputemp.h
+src/cputemp.hpp
