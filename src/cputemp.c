@@ -314,7 +314,7 @@ static int get_throttle (void)
 
 static gboolean cpu_update (CPUTempPlugin *c)
 {
-    char buffer[10];
+    char *buffer;
     int temp, thr;
     float ftemp;
 
@@ -322,7 +322,7 @@ static gboolean cpu_update (CPUTempPlugin *c)
 
     temp = get_temperature (c);
 
-    sprintf (buffer, "%3d°", temp);
+    buffer = g_strdup_printf ("%3d°", temp);
 
     ftemp = temp;
     ftemp -= c->lower_temp;
@@ -338,6 +338,7 @@ static gboolean cpu_update (CPUTempPlugin *c)
 
     graph_new_point (&(c->graph), ftemp, thr, buffer);
 
+    g_free (buffer);
     return TRUE;
 }
 
