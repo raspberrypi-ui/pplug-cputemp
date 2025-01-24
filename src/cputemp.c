@@ -40,13 +40,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ============================================================================*/
 
-#include <stdio.h>
-#include <string.h>
 #include <locale.h>
-#include <sys/time.h>
-#include <time.h>
-#include <sys/sysinfo.h>
-#include <stdlib.h>
 #include <glib/gi18n.h>
 
 #ifdef LXPLUG
@@ -355,7 +349,7 @@ static gboolean cpu_update (CPUTempPlugin *c)
 /* Handler for system config changed message from panel */
 void cputemp_update_display (CPUTempPlugin *c)
 {
-    graph_reload (&(c->graph), wrap_icon_size(c), c->background_colour, c->foreground_colour,
+    graph_reload (&(c->graph), wrap_icon_size (c), c->background_colour, c->foreground_colour,
         c->low_throttle_colour, c->high_throttle_colour);
 }
 
