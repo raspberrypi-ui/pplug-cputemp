@@ -25,6 +25,10 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ============================================================================*/
 
+/*----------------------------------------------------------------------------*/
+/* Typedefs and macros                                                        */
+/*----------------------------------------------------------------------------*/
+
 #define MAX_NUM_SENSORS 10
 
 typedef gint (*GetTempFunc) (char const *);
@@ -54,6 +58,14 @@ typedef struct
     GdkRGBA low_throttle_colour;            /* Colour for bars with ARM freq cap */
     GdkRGBA high_throttle_colour;           /* Colour for bars with throttling */
 } CPUTempPlugin;
+
+/*----------------------------------------------------------------------------*/
+/* Prototypes                                                                 */
+/*----------------------------------------------------------------------------*/
+
+extern void cputemp_init (CPUTempPlugin *up);
+extern void cputemp_update_display (CPUTempPlugin *up);
+extern void cputemp_destructor (gpointer user_data);
 
 /* End of file */
 /*----------------------------------------------------------------------------*/
