@@ -35,6 +35,8 @@ typedef gint (*GetTempFunc) (char const *);
 
 typedef struct
 {
+    GtkWidget *plugin;
+
 #ifdef LXPLUG
     LXPanel *panel;                         /* Back pointer to panel */
     config_setting_t *settings;             /* Plugin settings */
@@ -43,7 +45,7 @@ typedef struct
     gboolean bottom;
     GtkGesture *gesture;
 #endif
-    GtkWidget *plugin;                      /* Back pointer to the widget */
+
     PluginGraph graph;
     guint timer;                            /* Timer for periodic update */
     int numsensors;

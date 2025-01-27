@@ -64,12 +64,27 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define SYSFS_THERMAL_TEMPF         "temp"
 
 /*----------------------------------------------------------------------------*/
-/* Plug-in global data                                                        */
+/* Global data                                                                */
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
 /* Prototypes                                                                 */
 /*----------------------------------------------------------------------------*/
+
+static gboolean is_pi (void);
+static gint proc_get_temperature (char const *sensor_path);
+static gint _get_reading (const char *path);
+static gint sysfs_get_temperature (char const *sensor_path);
+static gint hwmon_get_temperature (char const *sensor_path);
+static int add_sensor (CPUTempPlugin* c, char const* sensor_path, GetTempFunc get_temp);
+static gboolean try_hwmon_sensors (CPUTempPlugin* c, const char *path);
+static void find_hwmon_sensors (CPUTempPlugin* c);
+static void find_sensors (CPUTempPlugin* c, char const* directory, char const* subdir_prefix, GetTempFunc get_temp);
+static void check_sensors (CPUTempPlugin *c);
+static gint get_temperature (CPUTempPlugin *c);
+static char *get_string (char *cmd);
+static int get_throttle (void);
+static gboolean cpu_update (CPUTempPlugin *c);
 
 /*----------------------------------------------------------------------------*/
 /* Function definitions                                                       */
@@ -308,7 +323,6 @@ static int get_throttle (void)
     g_free (buf);
     return val;
 }
-
 
 /* Periodic timer callback */
 
