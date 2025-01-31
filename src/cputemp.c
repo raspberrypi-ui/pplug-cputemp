@@ -85,6 +85,8 @@ static gint get_temperature (CPUTempPlugin *c);
 static char *get_string (char *cmd);
 static int get_throttle (void);
 static gboolean cpu_update (CPUTempPlugin *c);
+static gboolean write_config (CPUTempPlugin *c);
+static void validate_temps (CPUTempPlugin *c);
 
 /*----------------------------------------------------------------------------*/
 /* Function definitions                                                       */
@@ -338,6 +340,8 @@ static gboolean cpu_update (CPUTempPlugin *c)
 
     buffer = g_strdup_printf ("%3d°", temp);
 
+    validate_temps (c);
+
     ftemp = temp;
     ftemp -= c->lower_temp;
     ftemp /= (c->upper_temp - c->lower_temp);
@@ -356,6 +360,50 @@ static gboolean cpu_update (CPUTempPlugin *c)
     return TRUE;
 }
 
+static gboolean write_config (CPUTempPlugin *c)
+{
+#ifdef LXPLUG
+    (void) c;
+#else
+    char *strval, *user_file;
+    GKeyFile *kf;
+    gsize len;
+
+    user_file = g_build_filename (g_get_user_config_dir (), "wf-panel-pi.ini", NULL);
+    kf = g_key_file_new ();
+    g_key_file_load_from_file (kf, user_file, G_KEY_FILE_KEEP_COMMENTS | G_KEY_FILE_KEEP_TRANSLATIONS, NULL);
+
+    g_key_file_set_integer (kf, "panel", "cputemp_low_temp", c->lower_temp);
+    g_key_file_set_integer (kf, "panel", "cputemp_high_temp", c->upper_temp);
+
+    strval = g_key_file_to_data (kf, &len, NULL);
+    g_file_set_contents (user_file, strval, len, NULL);
+
+    g_free (strval);
+    g_key_file_free (kf);
+    g_free (user_file);
+#endif
+
+    return FALSE;
+}
+
+static void validate_temps (CPUTempPlugin *c)
+{
+    int lower, upper;
+
+    lower = c->lower_temp;
+    upper = c->upper_temp;
+
+    if (c->lower_temp < 0 || c->lower_temp > 100) c->lower_temp = 40;
+    if (c->upper_temp < 0 || c->upper_temp > 150) c->upper_temp = 90;
+    if (c->upper_temp <= c->lower_temp)
+    {
+        c->lower_temp = 40;
+        c->upper_temp = 90;
+    }
+
+    if (lower != c->lower_temp || upper != c->upper_temp) g_idle_add ((GSourceFunc) write_config, (gpointer) c);
+}
 
 /*----------------------------------------------------------------------------*/
 /* wf-panel plugin functions                                                  */
@@ -364,6 +412,7 @@ static gboolean cpu_update (CPUTempPlugin *c)
 /* Handler for system config changed message from panel */
 void cputemp_update_display (CPUTempPlugin *c)
 {
+    validate_temps (c);
     graph_reload (&(c->graph), wrap_icon_size (c), c->background_colour, c->foreground_colour,
         c->low_throttle_colour, c->high_throttle_colour);
 }
@@ -390,8 +439,7 @@ void cputemp_init (CPUTempPlugin *c)
 #endif
 
     /* Constrain temperatures */
-    if (c->lower_temp < 0 || c->lower_temp > 100) c->lower_temp = 40;
-    if (c->upper_temp < 0 || c->upper_temp > 150) c->upper_temp = 90;
+    validate_temps (c);
 
     cputemp_update_display (c);
 
@@ -480,9 +528,7 @@ static gboolean cpu_apply_configuration (gpointer user_data)
     CPUTempPlugin *c = lxpanel_plugin_get_data (GTK_WIDGET (user_data));
     char colbuf[32];
 
-    /* Constrain temperatures */
-    if (c->lower_temp < 0 || c->lower_temp > 100) c->lower_temp = 40;
-    if (c->upper_temp < 0 || c->upper_temp > 150) c->upper_temp = 90;
+    validate_temps (c);
 
     sprintf (colbuf, "%s", gdk_rgba_to_string (&c->foreground_colour));
     config_group_set_string (c->settings, "Foreground", colbuf);

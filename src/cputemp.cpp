@@ -75,11 +75,8 @@ void WayfireCPUTemp::settings_changed_cb (void)
     if (!gdk_rgba_parse (&cput->high_throttle_colour, ((std::string) throttle2_colour).c_str()))
         gdk_rgba_parse (&cput->high_throttle_colour, "red");
 
-    if (low_temp >= 0 && low_temp <= 100) cput->lower_temp = low_temp;
-    else cput->lower_temp = 40;
-
-    if (high_temp >= 0 && high_temp <= 150 && high_temp > cput->lower_temp) cput->upper_temp = high_temp;
-    else cput->upper_temp = 90;
+    cput->lower_temp = low_temp;
+    cput->upper_temp = high_temp;
 
     cputemp_update_display (cput);
 }
