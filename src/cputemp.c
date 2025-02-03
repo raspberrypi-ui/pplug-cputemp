@@ -433,11 +433,6 @@ void cputemp_init (CPUTempPlugin *c)
     /* Find the system thermal sensors */
     check_sensors (c);
 
-#ifndef LXPLUG
-    /* Set up long press */
-    c->gesture = add_long_press (c->plugin, NULL, NULL);
-#endif
-
     /* Constrain temperatures */
     validate_temps (c);
 
@@ -457,9 +452,6 @@ void cputemp_destructor (gpointer user_data)
     graph_free (&(c->graph));
     if (c->timer) g_source_remove (c->timer);
 
-#ifndef LXPLUG
-    if (c->gesture) g_object_unref (c->gesture);
-#endif
     g_free (c);
 }
 
