@@ -1,14 +1,14 @@
-# Slovak translation for lxplug_cputemp package.
-# Copyright (C) 2019 Raspberry Pi Ltd
-# This file is distributed under the same license as the lxplug_cputemp package.
+# Slovak translations for PACKAGE package.
+# Copyright (C) 2017 THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
 # Jose Riha <jose1711 gmail com>, 2020.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: lxplug_cputemp 0.1\n"
+"Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-03-29 08:23+0000\n"
-"PO-Revision-Date: 2020-11-28 22:37+0100\n"
+"POT-Creation-Date: 2025-02-03 11:06+0000\n"
+"PO-Revision-Date: 2025-01-31 22:27+0100\n"
 "Last-Translator: Jose Riha <jose1711@gmail.com>\n"
 "Language-Team: Slovak\n"
 "Language: sk\n"
@@ -16,40 +16,47 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Generator: Poedit 2.4.1\n"
+"X-Generator: Poedit 3.5\n"
 
-#: ../plugins/cputemp/cputemp.c:638
+#: ../src/cputemp.c:545
 msgid "CPU Temperature"
 msgstr "Teplota CPU"
 
-#: ../plugins/cputemp/cputemp.c:640
+#: ../src/cputemp.c:547 ../src/cputemp.cpp:37
 msgid "Foreground colour"
 msgstr "Farba popredia"
 
-#: ../plugins/cputemp/cputemp.c:641
+#: ../src/cputemp.c:548 ../src/cputemp.cpp:38
 msgid "Background colour"
 msgstr "Farba pozadia"
 
-#: ../plugins/cputemp/cputemp.c:642
+#: ../src/cputemp.c:549 ../src/cputemp.cpp:39
 msgid "Colour when ARM frequency capped"
 msgstr "Farba pri obmedzovaní frekvencie ARM"
 
-#: ../plugins/cputemp/cputemp.c:643
+#: ../src/cputemp.c:550 ../src/cputemp.cpp:40
 msgid "Colour when throttled"
 msgstr "Farba pri spomaľovaní výkonu"
 
-#: ../plugins/cputemp/cputemp.c:644
+#: ../src/cputemp.c:551 ../src/cputemp.cpp:41
 msgid "Lower temperature bound"
 msgstr "Spodná hranica teploty"
 
-#: ../plugins/cputemp/cputemp.c:645
+#: ../src/cputemp.c:552 ../src/cputemp.cpp:42
 msgid "Upper temperature bound"
 msgstr "Horná hranica teploty"
 
-#: ../plugins/cputemp/cputemp.c:653
+#: ../src/cputemp.c:560
 msgid "CPU Temperature Monitor"
 msgstr "Sledovanie teploty CPU"
 
-#: ../plugins/cputemp/cputemp.c:655
+#: ../src/cputemp.c:562
 msgid "Display CPU temperature"
 msgstr "Zobraziť teplotu CPU"
+
+#: ../src/cputemp.cpp:46
+#, fuzzy
+msgid "CPU Temp"
+msgstr "Teplota CPU"
+
+#, c-format
