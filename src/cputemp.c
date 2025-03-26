@@ -71,7 +71,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* Prototypes                                                                 */
 /*----------------------------------------------------------------------------*/
 
-static gboolean is_pi (void);
 static gint proc_get_temperature (char const *sensor_path);
 static gint _get_reading (const char *path);
 static gint sysfs_get_temperature (char const *sensor_path);
@@ -91,14 +90,6 @@ static void validate_temps (CPUTempPlugin *c);
 /*----------------------------------------------------------------------------*/
 /* Function definitions                                                       */
 /*----------------------------------------------------------------------------*/
-
-static gboolean is_pi (void)
-{
-    if (system ("raspi-config nonint is_pi") == 0)
-        return TRUE;
-    else
-        return FALSE;
-}
 
 static gint proc_get_temperature (char const *sensor_path)
 {

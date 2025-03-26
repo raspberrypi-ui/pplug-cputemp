@@ -1,3 +1,9 @@
+pplug-cputemp (0.14) bookworm; urgency=medium
+
+  * Use parent is_pi function
+
+ -- Simon Long <simon@raspberrypi.com>  Wed, 26 Mar 2025 13:55:35 +0000
+
 pplug-cputemp (0.13) bookworm; urgency=medium
 
   * First hybrid package version
