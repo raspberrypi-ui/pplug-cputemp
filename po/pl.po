@@ -1,0 +1,51 @@
+# Polish translations for plugin package.
+# Copyright (C) 2025 Raspberry Pi
+# This file is distributed under the same license as the wf-panel-pi package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-16 20:24+0200\n"
+"PO-Revision-Date: 2026-04-16 20:41+0200\n"
+"Last-Translator: Skotniczny <skotniczny@outlook.com>\n"
+"Language-Team: \n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: ../src/cputemp.c:56
+msgid "Foreground colour"
+msgstr "Kolor pierwszego planu"
+
+#: ../src/cputemp.c:57
+msgid "Background colour"
+msgstr "Kolor tła"
+
+#: ../src/cputemp.c:58
+msgid "Colour when ARM frequency capped"
+msgstr "Kolor przy ograniczonej częstotliwości ARM"
+
+#: ../src/cputemp.c:59
+msgid "Colour when throttled"
+msgstr "Kolor przy throttlingu"
+
+#: ../src/cputemp.c:60
+msgid "Lower temperature bound"
+msgstr "Dolna granica temperatury"
+
+#: ../src/cputemp.c:61
+msgid "Upper temperature bound"
+msgstr "Górna granica temperatury"
+
+#: ../src/cputemp.c:518
+msgid "Display CPU temperature"
+msgstr "Wyświetl temperaturę procesora"
+
+#. End of file
+#. ----------------------------------------------------------------------------
+#: ../src/cputemp.h:32
+msgid "CPU Temperature"
+msgstr "Temperatura CPU"
